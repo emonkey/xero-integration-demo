@@ -400,6 +400,7 @@ class App {
     router.get("/contacts", async (req: Request, res: Response) => {
       try {
         // Technical Exercise: Upsert Rod Drury
+        //   hardcoded and removed randomness for convenience
         const rodContact: Contact = {
           name: 'Rod Drury',
           firstName: 'Rod',
@@ -409,6 +410,7 @@ class App {
         newContacts.contacts = [rodContact];
         const contactCreateResponse = await this.xero.accountingApi.updateOrCreateContacts(req.session.activeTenant.tenantId, newContacts);
 
+        //   make sure Rod has been added only once
         // GET ALL
         const contactsGetResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId);
 
@@ -513,13 +515,16 @@ class App {
         // };
 
         // Technical Exercise: Create new invoice
+        //   get hardcoded contact
         var where: string;
         where = 'Name=="Rod Drury"';
         const contactsResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId, null, where);
 
+        //   raise invoice against sales account
         where = 'Name=="Sales" AND Status=="' + Account.StatusEnum.ACTIVE + '" AND Type=="' + AccountType.REVENUE + '"';
         const getAccountsResponse = await this.xero.accountingApi.getAccounts(req.session.activeTenant.tenantId, null, where);
 
+        //   get details for the 2 hardcoded items and associated quantity
         var itemGetResponse;
         // where = "Name==Surfboard";
         // itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId, null, where);
@@ -533,6 +538,7 @@ class App {
         const skateboard = itemGetResponse.body.items.filter(item => item.code === "Skateboard")[0];
         const skateboardQuantity = 5;
 
+        //   look up tax rate for active account
         where = 'Status=="ACTIVE"';
         const taxType = getAccountsResponse.body.accounts[0].taxType;
         const taxRateGetResponse = await this.xero.accountingApi.getTaxRates(req.session.activeTenant.tenantId, where, null, taxType);
@@ -545,6 +551,7 @@ class App {
 
         var invoiceTotal = subTotal + totalTax;
 
+        //   raise invoice with as many dynamic variables as possible
         const newInvoice: Invoice = {
           type: Invoice.TypeEnum.ACCREC,
           contact: {
@@ -624,6 +631,7 @@ class App {
         // updateInvoices.invoices = [invoice1, invoice2];
         // await this.xero.accountingApi.updateOrCreateInvoices(req.session.activeTenant.tenantId, updateInvoices, false)
 
+        //   check that the right invoice was raised
         // GET ONE
         const getInvoice = await this.xero.accountingApi.getInvoice(req.session.activeTenant.tenantId, createdInvoice.body.invoices[0].invoiceID);
         const invoiceId = getInvoice.body.invoices[0].invoiceID
@@ -669,6 +677,7 @@ class App {
       // w/ cOGS codes to have this work with an empty this.xero Org
       try {
         // Technical Exercise: Upsert Surfboard and Skateboard
+        //   hard code 2 items to upsert
         const newSurfboard: Item = {
           code: "Surfboard",
           name: "Surfboard",
@@ -704,6 +713,7 @@ class App {
 
         const itemCreateResponse = await this.xero.accountingApi.updateOrCreateItems(req.session.activeTenant.tenantId, newItems);
 
+        //   make sure both items are only added once
         // GET ALL
         const itemsGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId);
 
@@ -802,19 +812,22 @@ class App {
 
         // const createInvoiceResponse = await this.xero.accountingApi.createInvoices(req.session.activeTenant.tenantId, invoices);
 
+        //   payment completed by hardcoded contact
         var where: string, order: string;
         where = 'Name=="Rod Drury"';
         const contactsResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId, null, where);
 
+        //   get least recent invoice assigned to contact
         where = "AmountDue!=0";
         order = "Date ASC";
         const getInvoicesResponse = await this.xero.accountingApi.getInvoices(
           req.session.activeTenant.tenantId, null, where, order, null, null, [contactsResponse.body.contacts[0].contactID]);
-        var invoice = getInvoicesResponse.body.invoices[0];
+        //   convenience variables
+        const invoice = getInvoicesResponse.body.invoices[0];
         const invoiceId = invoice.invoiceID;
         const amountDue = invoice.amountDue;
 
-        // Approve
+        //   approve the invoice for convenience
         const newStatus = { status: Invoice.StatusEnum.AUTHORISED };
         const invoiceToUpdate: Invoices = {
           invoices: [
@@ -823,6 +836,7 @@ class App {
         };
         const updateInvoiceResponse = await this.xero.accountingApi.updateInvoice(req.session.activeTenant.tenantId, invoiceId, invoiceToUpdate);
 
+        //   create the payment ready to go
         const payments: Payments = {
           payments: [
             {
@@ -838,17 +852,19 @@ class App {
           ]
         };
 
+        //   check that the invoice has outstanding amounts
         var createPaymentResponse: any, getPaymentResponse: any;
         if (amountDue > 0 ) {
           createPaymentResponse = await this.xero.accountingApi.createPayments(req.session.activeTenant.tenantId, payments);
 
           getPaymentResponse = await this.xero.accountingApi.getPayment(req.session.activeTenant.tenantId, createPaymentResponse.body.payments[0].paymentID);
+        //   otherwise just retrieve the invoice
         } else {
           where = "Invoice.InvoiceID=guid(" + invoiceId + ")";
           getPaymentResponse = await this.xero.accountingApi.getPayments(req.session.activeTenant.tenantId, null, where);
         }
 
-        // DELETE~
+        // DELETE
         // spec needs to be updated, it's trying to modify a payment but that throws a validation error
 
         res.render("payments", {
