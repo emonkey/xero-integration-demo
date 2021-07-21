@@ -8,10 +8,13 @@
       <div class='body-wrapper'>
         <div class='body-content'>
           <p><strong>Read all Items - count:</strong> <%= itemsCount %></p>
-          <p><strong>Create Item - name :</strong> <%= createName %></p>
-          <p><strong>Read one Item - name :</strong> <%= getOneName %></p>
-          <p><strong>Updated Item - name :</strong> <%= updateName %></p>
-          <p><strong>Deleted Item - response code :</strong> <%= deleteResponse %></p>
+
+          <p><strong>All Items:</strong>
+          <ol>
+          <% for(var i=0; i < allItems.length; i++) { %>
+            <li><%= allItems[i].name %>; Price: $<%= allItems[i].salesDetails.unitPrice.toFixed(2) %></li>
+          <% } %>
+          </ol>
         </div>
       </div>
     </div>

@@ -11,9 +11,12 @@
               <h4>https://developer.xero.com/documentation/api/contacts</h4>
             </a>
             <p><strong>Read all Contacts - count:</strong> <%= contactsCount %></p>
-            <p><strong>Create Contact - name :</strong> <%= createName %></p>
-            <p><strong>Read one Contact - name :</strong> <%= getOneName %></p>
-            <p><strong>Updated Contact :</strong> <%= JSON.stringify(updatedContact, null, 2).replace(/[{}]/g, '') %></p>
+            <p><strong>All Contacts:</strong>
+              <ol>
+              <% for(var i=0; i < allContacts.length; i++) { %>
+                <li><%= allContacts[i].name %></li>
+              <% } %>
+              </ol>
         </div>
       </div>
     </div>
