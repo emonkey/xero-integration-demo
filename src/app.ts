@@ -35,7 +35,7 @@ const mime = require("mime-types");
 const client_id = process.env.CLIENT_ID;
 const client_secret = process.env.CLIENT_SECRET;
 const redirectUrl = process.env.REDIRECT_URI;
-const scopes = "offline_access openid profile email accounting.transactions accounting.settings.read accounting.contacts accounting.contacts.read";
+const scopes = "offline_access openid profile email accounting.transactions accounting.settings accounting.contacts accounting.contacts.read";
 
 // const this.xero = new this.xeroClient({
 //   clientId: client_id,
@@ -123,11 +123,19 @@ class App {
     const router = express.Router();
 
     router.get("/", async (req: Request, res: Response) => {
-      if (req.session.tokenSet) {
-        console.log("Reset session and data.");
-        // This reset the session and required data on the xero client after ts recompile
-        await this.xero.setTokenSet(req.session.tokenSet);
-        await this.xero.updateTenants();
+      try {
+        if (req.session.tokenSet) {
+          console.log("Reset session and data.");
+          // This reset the session and required data on the xero client after ts recompile
+          await this.xero.setTokenSet(req.session.tokenSet);
+          await this.xero.updateTenants(false);
+        }
+      } catch (e) {
+        // res.status(res.statusCode);
+        // res.render("shared/error", {
+        //   consentUrl: await this.xero.buildConsentUrl(),
+        //   error: e
+        // });
       }
 
       try {
@@ -513,18 +521,20 @@ class App {
         const getAccountsResponse = await this.xero.accountingApi.getAccounts(req.session.activeTenant.tenantId, null, where);
 
         var itemGetResponse;
-        where = "Name==Surfboard";
-        itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId, null, where);
-        const surfboard = itemGetResponse.body.items[0];
+        // where = "Name==Surfboard";
+        // itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId, null, where);
+        itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId);
+        const surfboard = itemGetResponse.body.items.filter(item => item.code === "Surfboard")[0];
         const surfboardQuantity = 4;
 
-        where = "Name==Skateboard";
-        itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId, null, where);
-        const skateboard = itemGetResponse.body.items[0];
+        // where = "Name==Skateboard";
+        // itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId, null, where);
+        itemGetResponse = await this.xero.accountingApi.getItems(req.session.activeTenant.tenantId);
+        const skateboard = itemGetResponse.body.items.filter(item => item.code === "Skateboard")[0];
         const skateboardQuantity = 5;
 
         where = 'Status=="ACTIVE"';
-        const taxType = "OUTPUT2";
+        const taxType = getAccountsResponse.body.accounts[0].taxType;
         const taxRateGetResponse = await this.xero.accountingApi.getTaxRates(req.session.activeTenant.tenantId, where, null, taxType);
         const taxRate = taxRateGetResponse.body.taxRates.filter(rate => rate.taxType === taxType)[0].effectiveRate / 100;
 
@@ -758,55 +768,79 @@ class App {
         //GET ALL
         const getPaymentsResponse = await this.xero.accountingApi.getPayments(req.session.activeTenant.tenantId);
 
-        // CREATE
-        // for that we'll need a contact & invoice
-        const getContactsResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId);
-        const invoices: Invoices = {
-          invoices: [
-            {
-              type: Invoice.TypeEnum.ACCREC,
-              contact: {
-                contactID: getContactsResponse.body.contacts[0].contactID
-              },
-              lineItems: [
-                {
-                  description: "Acme Tires",
-                  quantity: 2.0,
-                  unitAmount: 20.0,
-                  accountCode: "200",
-                  taxType: "OUTPUT",
-                  lineAmount: 40.0
-                }
-              ],
-              date: "2019-03-11",
-              dueDate: "2018-12-10",
-              reference: "Website Design",
-              status: Invoice.StatusEnum.AUTHORISED
-            }
-          ]
-        };
+        // // CREATE
+        // // for that we'll need a contact & invoice
+        // const getContactsResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId);
+        // const invoices: Invoices = {
+        //   invoices: [
+        //     {
+        //       type: Invoice.TypeEnum.ACCREC,
+        //       contact: {
+        //         contactID: getContactsResponse.body.contacts[0].contactID
+        //       },
+        //       lineItems: [
+        //         {
+        //           description: "Acme Tires",
+        //           quantity: 2.0,
+        //           unitAmount: 20.0,
+        //           accountCode: "200",
+        //           taxType: "OUTPUT",
+        //           lineAmount: 40.0
+        //         }
+        //       ],
+        //       date: "2019-03-11",
+        //       dueDate: "2018-12-10",
+        //       reference: "Website Design",
+        //       status: Invoice.StatusEnum.AUTHORISED
+        //     }
+        //   ]
+        // };
 
-        const createInvoiceResponse = await this.xero.accountingApi.createInvoices(req.session.activeTenant.tenantId, invoices);
+        // const createInvoiceResponse = await this.xero.accountingApi.createInvoices(req.session.activeTenant.tenantId, invoices);
+
+        var where: string, order: string;
+        where = 'Name=="Rod Drury"';
+        const contactsResponse = await this.xero.accountingApi.getContacts(req.session.activeTenant.tenantId, null, where);
+
+        where = "AmountDue!=0";
+        order = "Date ASC";
+        const getInvoicesResponse = await this.xero.accountingApi.getInvoices(
+          req.session.activeTenant.tenantId,
+          null,
+          where,
+          order,
+          null, null,
+          [contactsResponse.body.contacts[0].contactID],
+          null, null, null, null, null,
+          // Seriously??
+          true);
+        const invoiceId = getInvoicesResponse.body.invoices[0].invoiceID;
+        const amountDue = getInvoicesResponse.body.invoices[0].amountDue;
 
         const payments: Payments = {
           payments: [
             {
               invoice: {
-                invoiceID: createInvoiceResponse.body.invoices[0].invoiceID
+                invoiceID: invoiceId
               },
               account: {
                 code: "090"
               },
-              date: "2020-03-12",
-              amount: 3.50
+              date: new Date().toISOString(),
+              amount: amountDue
             },
           ]
         };
 
-        const createPaymentResponse = await this.xero.accountingApi.createPayments(req.session.activeTenant.tenantId, payments);
+        var createPaymentResponse: any, getPaymentResponse: any;
+        if (amountDue > 0 ) {
+          createPaymentResponse = await this.xero.accountingApi.createPayments(req.session.activeTenant.tenantId, payments);
 
-        // GET ONE
-        const getPaymentResponse = await this.xero.accountingApi.getPayment(req.session.activeTenant.tenantId, createPaymentResponse.body.payments[0].paymentID);
+          getPaymentResponse = await this.xero.accountingApi.getPayment(req.session.activeTenant.tenantId, createPaymentResponse.body.payments[0].paymentID);
+        } else {
+          where = "Invoice.InvoiceID=guid(" + invoiceId + ")";
+          getPaymentResponse = await this.xero.accountingApi.getPayments(req.session.activeTenant.tenantId, null, where);
+        }
 
         // DELETE
         // spec needs to be updated, it's trying to modify a payment but that throws a validation error
@@ -815,7 +849,9 @@ class App {
           consentUrl: await this.xero.buildConsentUrl(),
           authenticated: this.authenticationData(req, res),
           count: getPaymentsResponse.body.payments.length,
-          newPayment: createPaymentResponse.body.payments[0].paymentID,
+          newPayment: createPaymentResponse ?
+                        createPaymentResponse.body.payments[0].paymentID :
+                        getPaymentResponse.body.payments[0].paymentID,
           getPayment: getPaymentResponse.body.payments[0].invoice.contact.name
         });
       } catch (e) {
