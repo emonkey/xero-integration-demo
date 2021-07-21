@@ -640,7 +640,11 @@ class App {
         // const updatedInvoices = await this.xero.accountingApi.updateInvoice(req.session.activeTenant.tenantId, invoiceId, invoiceToUpdate)
 
         // GET ALL
-        const totalInvoices = await this.xero.accountingApi.getInvoices(req.session.activeTenant.tenantId);
+        const totalInvoices = await this.xero.accountingApi.getInvoices(
+                                      req.session.activeTenant.tenantId,
+                                      null, null, null, null, null, null, null, null, null, null, null,
+                                      // Seriously?? Need named parameters desperately...
+                                      true);
 
         res.render("invoices", {
           consentUrl: await this.xero.buildConsentUrl(),
@@ -805,17 +809,19 @@ class App {
         where = "AmountDue!=0";
         order = "Date ASC";
         const getInvoicesResponse = await this.xero.accountingApi.getInvoices(
-          req.session.activeTenant.tenantId,
-          null,
-          where,
-          order,
-          null, null,
-          [contactsResponse.body.contacts[0].contactID],
-          null, null, null, null, null,
-          // Seriously??
-          true);
-        const invoiceId = getInvoicesResponse.body.invoices[0].invoiceID;
-        const amountDue = getInvoicesResponse.body.invoices[0].amountDue;
+          req.session.activeTenant.tenantId, null, where, order, null, null, [contactsResponse.body.contacts[0].contactID]);
+        var invoice = getInvoicesResponse.body.invoices[0];
+        const invoiceId = invoice.invoiceID;
+        const amountDue = invoice.amountDue;
+
+        // Approve
+        const newStatus = { status: Invoice.StatusEnum.AUTHORISED };
+        const invoiceToUpdate: Invoices = {
+          invoices: [
+            Object.assign(invoice, newStatus)
+          ]
+        };
+        const updateInvoiceResponse = await this.xero.accountingApi.updateInvoice(req.session.activeTenant.tenantId, invoiceId, invoiceToUpdate);
 
         const payments: Payments = {
           payments: [
@@ -842,13 +848,14 @@ class App {
           getPaymentResponse = await this.xero.accountingApi.getPayments(req.session.activeTenant.tenantId, null, where);
         }
 
-        // DELETE
+        // DELETE~
         // spec needs to be updated, it's trying to modify a payment but that throws a validation error
 
         res.render("payments", {
           consentUrl: await this.xero.buildConsentUrl(),
           authenticated: this.authenticationData(req, res),
           count: getPaymentsResponse.body.payments.length,
+          updateResponse: updateInvoiceResponse.response.statusCode,
           newPayment: createPaymentResponse ?
                         createPaymentResponse.body.payments[0].paymentID :
                         getPaymentResponse.body.payments[0].paymentID,
